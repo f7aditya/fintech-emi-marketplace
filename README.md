@@ -9,7 +9,7 @@ Built for the **1Fi SDE‑1 assignment**.
 | | |
 |---|---|
 | **Android build (APK)** | _add your EAS build / Expo link here_ |
-| **Web application** | _add your Vercel URL here_ |
+| **Web application** | https://mutual-fund-emi-marketplace.vercel.app/ |
 | **API base URL** | https://onefi-marketplace-api-aditya.onrender.com |
 | **Demo video** | _add your Drive/YouTube link here (anyone‑with‑link)_ |
 | **Try instantly** | `npx expo start` in `mobile/`, then press **a** (Android) or scan the QR with **Expo Go** |
