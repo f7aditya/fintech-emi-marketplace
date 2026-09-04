@@ -146,11 +146,11 @@ const products = [
     tagline: 'Leica Summilux optical lens. Snapdragon 8 Gen 3.',
     description:
       'Co-engineered with Leica, Xiaomi 14 delivers an incredible photography experience in a perfectly sized 6.36-inch form factor. HyperOS and 90W HyperCharge included. Get it via No Cost EMI powered by your 1Fi investments.',
-    heroImage: 'https://images.unsplash.com/photo-1707921200155-83c9233630f9?auto=format&fit=crop&w=900&q=80',
+    heroImage: IMG.oneplusBlack,
     rating: 4.4,
     ratingCount: 421,
     variants: [
-      { storage: '512 GB', colorName: 'Jade Green', colorHex: '#4C6A5A', mrp: 79999, price: 69999, image: 'https://images.unsplash.com/photo-1707921200155-83c9233630f9?auto=format&fit=crop&w=900&q=80', isDefault: true },
+      { storage: '512 GB', colorName: 'Jade Green', colorHex: '#4C6A5A', mrp: 79999, price: 69999, image: IMG.oneplusBlack, isDefault: true },
       { storage: '512 GB', colorName: 'Matte Black', colorHex: '#111111', mrp: 79999, price: 69999, image: IMG.samsungBlack },
     ],
   },
