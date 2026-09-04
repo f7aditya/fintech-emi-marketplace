@@ -8,7 +8,7 @@ Built for the **1Fi SDE‑1 assignment**.
 
 | | |
 |---|---|
-| **Android build (APK)** | _add your EAS build / Expo link here_ |
+| **Android build (APK)** | https://expo.dev/accounts/f7_rebel/projects/onefi-marketplace/builds/8622d277-0b32-42e3-86c5-268fe509412a |
 | **Web application** | https://mutual-fund-emi-marketplace.vercel.app/ |
 | **API base URL** | https://onefi-marketplace-api-aditya.onrender.com |
 | **Demo video** | _add your Drive/YouTube link here (anyone‑with‑link)_ |
