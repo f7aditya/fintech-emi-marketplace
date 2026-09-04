@@ -2,7 +2,7 @@
 # The mobile app (mobile/) is built separately with EAS / Expo.
 services:
   - type: web
-    name: onefi-marketplace-api
+    name: onefi-marketplace-api-aditya
     runtime: node
     rootDir: server
     plan: free
