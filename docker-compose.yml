@@ -1,0 +1,25 @@
+# Local PostgreSQL for development.
+#   docker compose up -d
+# Connection string (already the default in server/.env.example):
+#   postgresql://onefi:onefi@localhost:5432/onefi_marketplace?schema=public
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: onefi-marketplace-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: onefi
+      POSTGRES_PASSWORD: onefi
+      POSTGRES_DB: onefi_marketplace
+    ports:
+      - '5432:5432'
+    volumes:
+      - onefi_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U onefi -d onefi_marketplace']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  onefi_pgdata:

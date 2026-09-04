@@ -1,0 +1,32 @@
+node_modules/
+dist/
+build/
+.DS_Store
+
+# env files — commit only the .example versions
+.env
+.env.local
+.env.*.local
+server/.env
+mobile/.env
+
+# expo / react native
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/expo-env.d.ts
+mobile/ios/
+mobile/android/
+.metro-health-check*
+
+# logs
+*.log
+npm-debug.log*
+
+# prisma
+server/prisma/*.db
+server/prisma/migrations/dev.db*
+
+# editor
+.vscode/
+.idea/

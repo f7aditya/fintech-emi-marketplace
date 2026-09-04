@@ -1,0 +1,31 @@
+{
+  "name": "1fi-marketplace-server",
+  "version": "1.0.0",
+  "description": "Backend API for the 1Fi Marketplace EMI product catalogue",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "prisma:generate": "prisma generate",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "db:seed": "node prisma/seed.js",
+    "db:reset": "prisma migrate reset --force",
+    "setup": "prisma generate && prisma migrate deploy && node prisma/seed.js"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  }
+}

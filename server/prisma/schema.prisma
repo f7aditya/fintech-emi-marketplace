@@ -1,0 +1,133 @@
+// 1Fi Marketplace — data model
+// Money is stored in paise (integer) everywhere to avoid floating point rounding errors.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// A sellable product (e.g. "Apple iPhone 17 Pro"). Each product owns one or more variants.
+model Product {
+  id          String   @id @default(cuid())
+  slug        String   @unique /// used to build the public URL: /products/:slug
+  name        String
+  brand       String
+  category    String   @default("Smartphones")
+  tagline     String   /// one-line marketing copy shown under the title
+  description String
+  heroImage   String   /// primary product image (URL)
+  rating      Float    @default(4.5)
+  ratingCount Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  variants Variant[]
+
+  @@map("products")
+}
+
+/// A specific configuration of a product (storage + colour). Pricing lives here because
+/// it changes per configuration, and every variant carries its own set of EMI plans.
+model Variant {
+  id         String   @id @default(cuid())
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId  String
+  sku        String   @unique
+  label      String   /// human label, e.g. "256 GB · Silver"
+  colorName  String
+  colorHex   String   /// swatch colour for the UI
+  storage    String   /// e.g. "256 GB"
+  imageUrl   String
+  mrpPaise   Int      /// maximum retail price, in paise
+  pricePaise Int      /// current selling price, in paise
+  inStock    Boolean  @default(true)
+  isDefault  Boolean  @default(false) /// the variant selected when the page first loads
+  createdAt  DateTime @default(now())
+
+  emiPlans EmiPlan[]
+
+  @@index([productId])
+  @@map("variants")
+}
+
+/// An EMI option for a variant. "Backed by mutual funds" — the customer's down payment /
+/// principal is parked in the named 1Fi mutual fund, which is what makes the low / no cost
+/// interest possible.
+model EmiPlan {
+  id                String   @id @default(cuid())
+  variant           Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  variantId         String
+  title             String   /// e.g. "No Cost EMI"
+  provider          String   @default("1Fi")
+  fundName          String   /// mutual fund backing the plan, e.g. "1Fi Liquid Direct — Growth"
+  tenureMonths      Int
+  interestRate      Float    /// annual reducing rate as a percentage: 0, 10.5, 14 ...
+  monthlyPaise      Int      /// monthly instalment, in paise
+  downPaymentPaise  Int      @default(0)
+  cashbackPaise     Int      @default(0)
+  cashbackNote      String?  /// shown only when cashbackPaise > 0
+  totalPayablePaise Int      /// downPayment + (monthly * tenure) - cashback
+  isRecommended     Boolean  @default(false)
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+
+  @@index([variantId])
+  @@map("emi_plans")
+}
+
+/// A customer order placed from the bucket / cart. Line items snapshot the
+/// product, variant and EMI plan at purchase time so order history stays
+/// correct even if catalogue prices change later.
+model Order {
+  id                String   @id @default(cuid())
+  reference         String   @unique /// short human code, e.g. "1FI-8K2P4Q"
+  status            String   @default("PLACED") /// PLACED | CONFIRMED | CANCELLED
+  customerName      String?
+  itemCount         Int      /// sum of line quantities
+  monthlyPaise      Int      /// total of every line's monthly instalment
+  downPaymentPaise  Int      /// total due today
+  cashbackPaise     Int      /// total cashback across lines
+  totalPayablePaise Int      /// grand total over the full tenure, net of cashback
+  firstEmiOn        DateTime /// when the first instalment is due (createdAt + 1 month)
+  createdAt         DateTime @default(now())
+
+  items OrderItem[]
+
+  @@index([createdAt])
+  @@map("orders")
+}
+
+/// One line in an order — a chosen variant + EMI plan, with a quantity.
+model OrderItem {
+  id                String @id @default(cuid())
+  order             Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId           String
+
+  // --- snapshot of the product / variant / plan at purchase time ---
+  productId    String
+  productSlug  String
+  productName  String
+  brand        String
+  variantId    String
+  variantLabel String
+  imageUrl     String
+  emiPlanId    String
+  planTitle    String
+  fundName     String
+  tenureMonths Int
+  interestRate Float
+
+  quantity          Int @default(1)
+  unitPricePaise    Int /// variant price at purchase
+  monthlyPaise      Int /// monthly instalment * quantity
+  downPaymentPaise  Int /// down payment * quantity
+  cashbackPaise     Int /// cashback * quantity
+  totalPayablePaise Int /// total payable * quantity
+
+  @@index([orderId])
+  @@map("order_items")
+}
