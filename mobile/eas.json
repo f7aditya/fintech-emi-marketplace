@@ -10,13 +10,13 @@
       "distribution": "internal",
       "android": { "buildType": "apk" },
       "env": {
-        "EXPO_PUBLIC_API_BASE": "https://onefi-marketplace-api.onrender.com"
+        "EXPO_PUBLIC_API_BASE": "https://onefi-marketplace-api-aditya.onrender.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_BASE": "https://onefi-marketplace-api.onrender.com"
+        "EXPO_PUBLIC_API_BASE": "https://onefi-marketplace-api-aditya.onrender.com"
       }
     }
   },
