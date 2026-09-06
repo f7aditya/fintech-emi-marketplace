@@ -19,6 +19,18 @@ services:
         # Native app requests send no Origin header, so "*" is fine here. Lock this
         # down to the Expo web origin if you also deploy the web build.
         value: "*"
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        # A strong random secret for signing session tokens.
+        generateValue: true
+      - key: ALLOW_MOCK_AUTH
+        # Dev-only mock sign-in is force-disabled in production anyway; keep it explicit.
+        value: "false"
+      - key: GOOGLE_CLIENT_IDS
+        # Comma-separated Google OAuth client IDs (Web + Android + iOS). Set in the
+        # Render dashboard once you have them; leave blank to disable Google verify.
+        sync: false
 
 databases:
   - name: onefi-marketplace-db

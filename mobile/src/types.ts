@@ -74,10 +74,42 @@ export type OrderItem = {
   totalPayable: Money;
 };
 
+// --- Auth --------------------------------------------------------------------
+
+export type User = {
+  id: string;
+  email: string;
+  name: string;
+  picture: string | null;
+  provider: 'google' | 'mock';
+  createdAt: string;
+};
+
+export type AuthConfig = { google: boolean; mock: boolean };
+export type AuthResponse = { token: string; user: User };
+export type MeResponse = { user: User };
+
+export type PaymentMethod = 'CARD' | 'UPI' | 'NETBANKING';
+export type PaymentStatus = 'CREATED' | 'PROCESSING' | 'SUCCESS' | 'FAILED';
+
+export type Payment = {
+  id: string;
+  reference: string;
+  gateway: string;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  amount: Money;
+  instrumentHint: string | null;
+  failureReason: string | null;
+  attempts: number;
+  paidAt: string | null;
+  createdAt: string;
+};
+
 export type Order = {
   id: string;
   reference: string;
-  status: 'PLACED' | 'CONFIRMED' | 'CANCELLED';
+  status: 'PENDING_PAYMENT' | 'PLACED' | 'CONFIRMED' | 'CANCELLED';
   customerName: string | null;
   itemCount: number;
   monthly: Money;
@@ -86,13 +118,24 @@ export type Order = {
   totalPayable: Money;
   firstEmiOn: string;
   createdAt: string;
+  payment?: Payment | null;
   items: OrderItem[];
 };
 
 export type CreateOrderPayload = {
   customerName?: string;
+  method?: PaymentMethod;
   items: { variantId: string; emiPlanId: string; quantity: number }[];
+};
+
+export type ConfirmPaymentPayload = {
+  method: PaymentMethod;
+  card?: { number: string; name?: string; expiry?: string; cvv?: string };
+  upiId?: string;
+  bank?: string;
+  simulate?: 'success' | 'failure';
 };
 
 export type OrderResponse = { order: Order };
 export type OrderListResponse = { count: number; orders: Order[] };
+export type PaymentResponse = { payment: Payment; order: Order };

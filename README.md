@@ -47,15 +47,19 @@ Per the assignment email, the **Shop** page has three options:
 | Top Brands | Intentionally left blank (empty‑state screen) |
 | Nearby Stores | Intentionally left blank (empty‑state screen) |
 
-The app is a **5‑tab bottom‑bar** shell (`src/app/(tabs)/`): **Home**, **Shop**, **EMI Dues**, **Limit**, **Profile**. Home shows the violet gradient “limit available” hero with a *Shop now* CTA; EMI Dues / Limit / Profile are on‑brand stubs that link back into the Marketplace. Everything below is under **Shop**.
+The app is a **5‑tab bottom‑bar** shell (`src/app/(tabs)/`): **Home**, **Shop**, **EMI Dues**, **Limit**, **Profile**. Home shows the violet gradient “limit available” hero with a *Shop now* CTA; EMI Dues / Limit are on‑brand stubs. **Profile** is a working **sign‑in** screen. Everything below is under **Shop**.
+
+**Sign in with Google (optional).** The Profile tab offers *Continue with Google* (`expo-auth-session`, works on web and native). The server verifies the Google ID token, upserts a `users` row, and returns a 30‑day session JWT that the app stores and sends as `Authorization: Bearer`. Signing in is never required — you can browse and buy anonymously — but once you’re signed in, orders are linked to your account, the checkout shows *“Paying as …”*, order history is scoped to you, and the Profile shows your Google name/photo. Until Google OAuth client IDs are configured, a clearly‑labelled **developer sign‑in** stands in so the flow is fully testable.
 
 The 1Fi Marketplace flow:
 
 * **Shop screen** — segmented Marketplace / Top Brands / Nearby Stores control, a 2‑column product grid with pull‑to‑refresh, each card showing image, brand, tagline, colour swatches, variant count and starting price. Header has a live **bucket** button with an item‑count badge; a “Your orders ›” link opens order history.
 * **Product screen** (`/products/:slug`, its own deep‑linkable URL) — laid out like the app’s **“Pay using 1Fi”** reference: header, product image with per‑variant thumbnails, rating, price with MRP + discount, a **SELECT YOUR VARIANT** list of full‑width radio rows (label · sub‑line · price), a selectable list of **EMI plans** (monthly amount, tenure, interest %, down payment, total payable, cashback, backing mutual fund, a “Recommended” plan), an “About” section, and a **sticky “Proceed with selected plan”** bar that adds the chosen variant + plan to the bucket and opens it (or, if it’s already there, jumps straight to the bucket).
-* **Bucket / cart** (`/cart`) — line items (image, variant, plan, a **quantity stepper**, per‑line monthly & total, remove), an **order summary** (total monthly EMI, due‑today down payment, cashback, total payable over tenure), a repayment‑schedule note with the first‑instalment date, and **“Place order”**. The bucket **persists across app restarts** via `AsyncStorage`.
+* **Bucket / cart** (`/cart`) — line items (image, variant, plan, a **quantity stepper**, per‑line monthly & total, remove), an **order summary** (total monthly EMI, due‑today down payment, cashback, total payable over tenure), a repayment‑schedule note with the first‑instalment date, and **“Proceed to payment”**. The bucket **persists across app restarts** via `AsyncStorage`.
+* **Payment** (`/checkout/:reference`) — a **dummy payment gateway** (“1Fi Pay”, test mode) for the due‑today amount: Card / UPI / Netbanking, a test‑card quick‑fill, and a Success/Failure override for demos. A declined charge is retryable; the bucket is cleared and the order confirmed only when the charge succeeds. All money is recomputed and the outcome decided **server‑side** (`POST /api/payments/:ref/confirm`).
 * **Order confirmation** (`/order/:reference`) — reference code, status, totals, first‑EMI date, and the ordered items.
-* **Order history** (`/orders`) — every placed order, newest first, tappable through to its confirmation screen. Backed by real rows in the database.
+* **Order history** (`/orders`) — every placed order, newest first, tappable through to its confirmation screen. Backed by real rows in the database. Scoped to the signed‑in user when authenticated.
+* **Profile / account** (`/profile`) — *Continue with Google* + a developer sign‑in when signed out; avatar, name, email, “Your orders” and sign‑out when signed in. Session persists across app restarts (`AsyncStorage`) and is re‑validated against `GET /api/auth/me` on launch.
 * Loading, empty and error states throughout; 404 handled for unknown product slugs and order references.
 
 ## Tech stack
@@ -65,7 +69,8 @@ The 1Fi Marketplace flow:
 | Mobile app | **React Native 0.86** via **Expo SDK 57**, **Expo Router** (file‑based `(tabs)` group + stack, typed routes), **TypeScript** |
 | UI | React Native `StyleSheet` + design tokens (`mobile/src/theme.ts`), `expo-image`, `expo-linear-gradient`, `@expo/vector-icons` (Ionicons) |
 | Typography | **Poppins** via `@expo-google-fonts/poppins`; `<AppText>` maps `fontWeight` → the matching Poppins family app‑wide |
-| Client state | React Context + `useReducer` cart store, persisted with `@react-native-async-storage/async-storage` |
+| Client state | React Context + `useReducer` cart & auth stores, persisted with `@react-native-async-storage/async-storage` |
+| Auth | **Google sign-in** via `expo-auth-session` (web + native) → server verifies the ID token (`google-auth-library`) and issues a session **JWT** (`jsonwebtoken`); optional, with a dev mock fallback |
 | Backend | **Node.js**, **Express 4** (ES modules) |
 | ORM | **Prisma 5** |
 | Database | **PostgreSQL 16** |
@@ -97,36 +102,43 @@ The 1Fi Marketplace flow:
 ├── scripts/dev.js              # runs API + Expo together, zero deps
 ├── server/
 │   ├── prisma/
-│   │   ├── schema.prisma       # data model (products, variants, emi_plans, orders, order_items)
-│   │   ├── migrations/         # SQL migrations (init, add_orders)
+│   │   ├── schema.prisma       # data model (users, products, variants, emi_plans, orders, order_items, payments)
+│   │   ├── migrations/         # SQL migrations (init, add_orders, add_payments, add_users)
 │   │   └── seed.js             # 4 products, 9 variants, 54 EMI plans
 │   └── src/
-│       ├── index.js            # Express app, CORS, health, errors
+│       ├── index.js            # Express app, CORS, health, attachUser, errors
 │       ├── prisma.js           # shared PrismaClient
+│       ├── routes/auth.js      # /api/auth endpoints (Google + dev mock → session JWT)
 │       ├── routes/products.js  # /api/products endpoints
-│       ├── routes/orders.js    # /api/orders endpoints (server-side re-pricing)
+│       ├── routes/orders.js    # /api/orders endpoints (server-side re-pricing, per-user)
+│       ├── routes/payments.js  # /api/payments endpoints (dummy gateway simulation)
+│       ├── lib/auth.js         # JWT sign/verify, Google ID-token verify, auth middleware
+│       ├── lib/reference.js    # short human codes (1FI-…, PAY-…)
 │       └── lib/serialize.js    # DB row → API shape (paise + ₹ strings)
 └── mobile/
     ├── app.json                # Expo config (Android package in.onefi.marketplace)
     ├── eas.json                # EAS build profiles
-    ├── .env.example            # EXPO_PUBLIC_API_BASE
+    ├── .env.example            # EXPO_PUBLIC_API_BASE, EXPO_PUBLIC_GOOGLE_*_CLIENT_ID
     └── src/
         ├── app/                # expo-router routes
-        │   ├── _layout.tsx              # root Stack + SafeAreaProvider + CartProvider + Poppins loader
+        │   ├── _layout.tsx              # root Stack + SafeAreaProvider + AuthProvider + CartProvider + Poppins loader
         │   ├── index.tsx                # redirects to /home
         │   ├── (tabs)/                  # bottom-tab shell
         │   │   ├── _layout.tsx          # 5-tab bar (Home · Shop · EMI Dues · Limit · Profile)
-        │   │   ├── home.tsx  emi-dues.tsx  limit.tsx  profile.tsx   # on-brand stubs
+        │   │   ├── home.tsx  emi-dues.tsx  limit.tsx   # on-brand stubs
+        │   │   ├── profile.tsx          # Google / dev sign-in · signed-in account view
         │   │   └── shop.tsx             # Shop page (Marketplace / Top Brands / Nearby Stores)
         │   ├── products/[slug].tsx      # product detail ("Pay using 1Fi" layout)
-        │   ├── cart.tsx                 # the bucket + place order
+        │   ├── cart.tsx                 # the bucket + proceed to payment
+        │   ├── checkout/[reference].tsx # dummy payment gateway ("1Fi Pay", test mode)
         │   ├── orders.tsx               # order history
         │   └── order/[reference].tsx    # order confirmation / detail
         ├── components/         # ProductCard, VariantSelector (radio rows), EmiPlanCard, PriceBlock,
         │                       #   Segmented, AppHeader (+ bucket badge), EmptyState, CartLineItem,
         │                       #   QuantityStepper, OrderSummaryCard, GradientHero, StubScreen, AppText
+        ├── auth.tsx            # AuthProvider / useAuth — Google (expo-auth-session) + mock, token persistence
         ├── cart.tsx            # CartProvider / useCart — reducer store, AsyncStorage persistence
-        ├── api.ts              # typed API client + base-URL resolution
+        ├── api.ts              # typed API client + base-URL resolution + bearer token
         ├── format.ts           # client-side ₹ + date formatting (cart totals)
         ├── types.ts            # API response types
         └── theme.ts            # violet palette, spacing, radius, shadow, Poppins weight map
@@ -199,12 +211,32 @@ npm run dev:mobile    # expo start
 | `DATABASE_URL` | `postgresql://onefi:onefi@localhost:5432/onefi_marketplace?schema=public` | Prisma connection string |
 | `PORT` | `4000` | API port |
 | `CORS_ORIGIN` | `http://localhost:8081,http://localhost:19006` | Allowed origins for the Expo web dev server. Native builds send no `Origin` header and are always allowed; use `*` in production. |
+| `JWT_SECRET` | `a-long-random-string` | Signs session JWTs. **Set a real secret in production.** |
+| `JWT_TTL` | `30d` | Session token lifetime |
+| `GOOGLE_CLIENT_IDS` | `123-abc.apps.googleusercontent.com,456-def…` | Comma‑separated Google OAuth client IDs accepted as the ID‑token `aud` (Web + Android + iOS). Blank → Google verification off (dev mock still works). |
+| `ALLOW_MOCK_AUTH` | `true` | Enables `POST /api/auth/mock`, the dev stand‑in for Google. Always ignored when `NODE_ENV=production`. |
 
 ### `mobile/.env`
 
 | Var | Example | Purpose |
 |---|---|---|
 | `EXPO_PUBLIC_API_BASE` | _(empty in dev)_ / `https://onefi-marketplace-api.onrender.com` | API origin for standalone builds. Empty in dev → LAN‑IP / localhost fallback. |
+| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | `123-abc.apps.googleusercontent.com` | Google **Web** client ID — used by the web build and the Expo Go / dev‑client flow. Also list it in `server/.env` `GOOGLE_CLIENT_IDS`. |
+| `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` | `123-xyz.apps.googleusercontent.com` | Google **Android** client ID (needs package `in.onefi.marketplace` + signing SHA‑1). |
+| `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | `123-ios.apps.googleusercontent.com` | Google **iOS** client ID (needs bundle id `in.onefi.marketplace`). |
+
+Leave every `EXPO_PUBLIC_GOOGLE_*` blank to run without Google — the Profile tab then offers a **developer sign‑in** (`POST /api/auth/mock`) so the whole flow is testable offline.
+
+### Setting up real Google sign-in
+
+1. **Google Cloud Console → APIs & Services → Credentials** → *Create credentials → OAuth client ID*. Configure the **OAuth consent screen** first (External, add your email as a test user).
+2. Create a **Web application** client:
+   * *Authorized JavaScript origins*: `http://localhost:8082` (and your deployed web origin).
+   * *Authorized redirect URIs*: `http://localhost:8082` (and the deployed origin). `expo-auth-session` redirects back to the page origin on web.
+   * Copy the client ID into **`mobile/.env` → `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`** *and* **`server/.env` → `GOOGLE_CLIENT_IDS`**.
+3. *(Android)* Create an **Android** client — package name `in.onefi.marketplace`, SHA‑1 from your signing key (`eas credentials` or `keytool`). Put the ID in `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` and append it to `server/.env` `GOOGLE_CLIENT_IDS` (comma‑separated). Native Google sign‑in needs a **dev/production build** (not Expo Go).
+4. *(iOS)* Create an **iOS** client — bundle id `in.onefi.marketplace` — into `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and `GOOGLE_CLIENT_IDS`.
+5. Restart Metro (`npx expo start --clear`) and the API so the new env is picked up. Set a strong `JWT_SECRET` and (for prod) `ALLOW_MOCK_AUTH=false`.
 
 ## Scripts
 
@@ -280,16 +312,31 @@ Index: `(productId)`.
 
 Index: `(variantId)`.
 
+### `users`
+
+A signed‑in customer. Sign‑in is **optional** — orders can still be placed anonymously — but once a user authenticates their orders link here and the Profile tab shows their name / photo.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | text (cuid) | PK |
+| `googleId` | text? | **unique** — Google `sub` claim; null for dev‑mock users |
+| `email` | text | **unique** |
+| `name` | text | display name |
+| `picture` | text? | avatar URL from Google |
+| `provider` | text | `google` \| `mock` |
+| `createdAt` `updatedAt` | timestamp | |
+
 ### `orders`
 
-Created when the customer taps **Place order** in the bucket.
+Created when the customer taps **Proceed to payment** in the bucket.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | text (cuid) | PK |
 | `reference` | text | **unique** — short human code, e.g. `1FI-8K2P4Q` |
-| `status` | text | `PLACED` \| `CONFIRMED` \| `CANCELLED` (default `PLACED`) |
-| `customerName` | text? | optional |
+| `status` | text | `PENDING_PAYMENT` \| `CONFIRMED` \| `PLACED` \| `CANCELLED` (default `PENDING_PAYMENT`) |
+| `userId` | text? | **FK → users.id** (`ON DELETE SET NULL`) — set when a signed‑in user placed it |
+| `customerName` | text? | optional; defaults to the signed‑in user's name |
 | `itemCount` | int | sum of line quantities |
 | `monthlyPaise` | int | total monthly instalment across lines |
 | `downPaymentPaise` | int | total due today |
@@ -298,7 +345,7 @@ Created when the customer taps **Place order** in the bucket.
 | `firstEmiOn` | timestamp | `createdAt + 1 month` |
 | `createdAt` | timestamp | |
 
-Index: `(createdAt)`.
+Indexes: `(createdAt)`, `(userId)`.
 
 ### `order_items`
 
@@ -319,6 +366,27 @@ Each line **snapshots** the product / variant / plan at purchase time, so order 
 
 Index: `(orderId)`.
 
+### `payments`
+
+One row per order, created alongside it, for the **“due today”** amount. The gateway (`DummyPay`) is **simulated** in `server/src/routes/payments.js` — no real money moves. A successful payment flips the order to `CONFIRMED`; a failed one can be retried in place.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | text (cuid) | PK |
+| `reference` | text | **unique** — e.g. `PAY-8K2P4Q` |
+| `orderId` | text | **FK → orders.id** (unique, `ON DELETE CASCADE`) |
+| `gateway` | text | `DummyPay` |
+| `method` | text | `CARD` \| `UPI` \| `NETBANKING` |
+| `amountPaise` | int | equals the order's `downPaymentPaise` |
+| `status` | text | `CREATED` \| `PROCESSING` \| `SUCCESS` \| `FAILED` (default `CREATED`) |
+| `instrumentHint` | text? | masked instrument, e.g. `•••• 4242`, `name@upi`, `HDFC Bank` |
+| `failureReason` | text? | set when `status = FAILED` |
+| `attempts` | int | confirm attempts so far |
+| `paidAt` | timestamp? | set when `status = SUCCESS` |
+| `createdAt` `updatedAt` | timestamp | |
+
+Index: `(orderId)`.
+
 ## Seed data
 
 `server/prisma/seed.js` inserts **4 products**, each with **2–3 variants**, each variant with a **6‑plan EMI ladder** (54 EMI plans total):
@@ -334,11 +402,38 @@ Index: `(orderId)`.
 
 Base URL: `http://localhost:4000` (dev) · JSON everywhere.
 
+Requests may carry `Authorization: Bearer <token>` (from the auth endpoints below). It is **optional everywhere** — when present, `POST /api/orders` links the order to that user and `GET /api/orders` returns only that user's orders.
+
 ### `GET /api/health`
 
 ```json
 { "status": "ok", "db": "up", "time": "2026-09-03T12:49:30.876Z" }
 ```
+
+### `GET /api/auth/config`
+
+Which sign‑in methods this server supports: `{ "google": false, "mock": true }`.
+
+### `POST /api/auth/google`
+
+Body `{ "idToken": "<Google ID token>" }`. The server verifies it against `GOOGLE_CLIENT_IDS`, upserts a `users` row (matched on `googleId`), and returns a session:
+
+```jsonc
+{
+  "token": "<JWT, 30d>",
+  "user": { "id": "cmt…", "email": "you@gmail.com", "name": "You", "picture": "https://…", "provider": "google" }
+}
+```
+
+`401` if the token can't be verified · `501` if `GOOGLE_CLIENT_IDS` is empty.
+
+### `POST /api/auth/mock`  *(dev only)*
+
+Body `{ "email": "you@example.com", "name": "You" }`. Same `{ token, user }` shape, `provider: "mock"`. Enabled only when `ALLOW_MOCK_AUTH=true` **and** `NODE_ENV !== "production"` (otherwise `404`). The Profile tab uses this when no Google client ID is set.
+
+### `GET /api/auth/me`
+
+`Authorization: Bearer` required. Returns `{ "user": {…} }` re‑read from the DB; `401` if the token is missing / expired / revoked.
 
 ### `GET /api/products`
 
@@ -457,13 +552,14 @@ EMI plans for a product, grouped by variant. Optional `?variant=<sku|variantId>`
 
 ### `POST /api/orders`
 
-Place an order from the bucket. The server **re‑reads every variant and EMI plan from the DB and recomputes all money** — client‑supplied prices are ignored — then writes the order and its snapshotted line items in one call.
+Place an order from the bucket. The server **re‑reads every variant and EMI plan from the DB and recomputes all money** — client‑supplied prices are ignored — then writes the order, its snapshotted line items, and a `CREATED` **payment** row (for the down‑payment amount) in one call. The order starts as `PENDING_PAYMENT`; the client then drives it to `CONFIRMED` via the payment endpoints below.
 
 Request:
 
 ```jsonc
 {
   "customerName": "optional",
+  "method": "CARD",           // optional: CARD | UPI | NETBANKING — sets payment.method
   "items": [
     { "variantId": "cmt…", "emiPlanId": "cmt…", "quantity": 2 }
   ]
@@ -476,7 +572,13 @@ Request:
 {
   "order": {
     "reference": "1FI-QH6CHB",
-    "status": "PLACED",
+    "status": "PENDING_PAYMENT",
+    "payment": {
+      "reference": "PAY-7T2K9M",
+      "method": "CARD",
+      "status": "CREATED",
+      "amount": { "paise": 0, "display": "₹0" }
+    },
     "itemCount": 2,
     "monthly":      { "paise": 2166634, "rupees": 21666.34, "display": "₹21,666" },
     "downPayment":  { "paise": 0, "display": "₹0" },
@@ -503,18 +605,47 @@ Validation: `400` empty/oversized `items` or bad quantity; `422` plan/variant mi
 
 ### `GET /api/orders`
 
-`{ "count": n, "orders": [ /* newest first, same shape as above */ ] }`
+`{ "count": n, "orders": [ /* newest first, same shape as above */ ] }`. Orders still `PENDING_PAYMENT` are hidden unless `?includePending=1`. With an `Authorization: Bearer` header → only that user's orders; without one → only orders that have no user attached.
 
 ### `GET /api/orders/:ref`
 
 By reference (case‑insensitive) or id. `404` if not found.
 
+### `GET /api/payments/:ref`
+
+Look up a payment by **payment reference**, payment id, or **order reference**. Returns `{ "payment": {…}, "order": {…} }`. `404` if not found.
+
+### `POST /api/payments/:ref/confirm`
+
+The dummy gateway. Simulates the charge and, on success, flips the order to `CONFIRMED`.
+
+```jsonc
+{
+  "method": "CARD",                         // CARD | UPI | NETBANKING
+  "card": { "number": "4242 4242 4242 4242", "name": "…", "expiry": "12/34", "cvv": "123" },
+  "upiId": "name@bank",                      // when method = UPI
+  "bank": "HDFC Bank",                       // when method = NETBANKING
+  "simulate": "success"                      // optional: "success" | "failure" — overrides the outcome
+}
+```
+
+Outcome (when `simulate` is omitted):
+
+| Method | Succeeds | Declines |
+|---|---|---|
+| `CARD` | any 16‑digit number… | …except test cards `4000 0000 0000 0002` (declined), `…9995` (insufficient funds), `…0069` (expired) |
+| `UPI` | any valid‑looking VPA | a VPA containing `fail`, e.g. `fail@upi` |
+| `NETBANKING` | always | — |
+
+Responses: `200 { payment, order }` on success; `402 { error, payment, order }` on a gateway decline (retryable); `400 { error }` for an invalid instrument; `404` unknown reference.
+
 ### Errors
 
 | Status | Body |
 |---|---|
-| `404` | `{ "error": "Product not found", "slug": "…" }` / `{ "error": "Order not found", "reference": "…" }` |
-| `400` / `409` / `422` | `{ "error": "…" }` (order validation) |
+| `404` | `{ "error": "Product not found", "slug": "…" }` / `{ "error": "Order not found", "reference": "…" }` / `{ "error": "Payment not found", "reference": "…" }` |
+| `400` / `409` / `422` | `{ "error": "…" }` (order / instrument validation) |
+| `402` | `{ "error": "…", "payment": {…}, "order": {…} }` (gateway decline — retryable) |
 | `500` | `{ "error": "…" }` |
 
 ## App screens & navigation
@@ -524,12 +655,14 @@ By reference (case‑insensitive) or id. `404` if not found.
 | Route | Screen | Notes |
 |---|---|---|
 | `/` | — | Redirects to `/home` |
-| `/home` `/emi-dues` `/limit` `/profile` | Tab stubs | On‑brand placeholders (out of scope per the brief) |
+| `/home` `/emi-dues` `/limit` | Tab stubs | On‑brand placeholders (out of scope per the brief) |
+| `/profile` | Profile / auth | Signed out → **Continue with Google** + a dev sign‑in; signed in → avatar, name, email, "Your orders", sign out. `GET /api/auth/me`, `POST /api/auth/google` \| `/mock` |
 | `/shop` | Shop | 3‑tab segmented control; `?tab=top-brands` / `?tab=nearby-stores` show the blank sections |
 | `/products/[slug]` | Product detail | Unique, deep‑linkable URL per product; `GET /api/products/:slug` |
-| `/cart` | Bucket | Line items + quantities + order summary; `POST /api/orders` on checkout |
+| `/cart` | Bucket | Line items + quantities + order summary; `POST /api/orders` creates a `PENDING_PAYMENT` order, then routes to checkout |
+| `/checkout/[reference]` | Payment (`1Fi Pay`, test mode) | Card / UPI / Netbanking, test‑card quick‑fill, a Success/Failure override; `POST /api/payments/:ref/confirm`. Bucket clears only on a successful charge |
 | `/orders` | Order history | `GET /api/orders` |
-| `/order/[reference]` | Order confirmation / detail | `GET /api/orders/:ref` |
+| `/order/[reference]` | Order confirmation / detail | `GET /api/orders/:ref` — shows the `Paid via …` line once the payment succeeds |
 
 Deep links resolve via the `onefi://` scheme (`app.json`), e.g. `onefi://products/oneplus-13` or `onefi://order/1FI-QH6CHB`.
 
@@ -576,6 +709,8 @@ The repo includes [`render.yaml`](render.yaml) (Blueprint):
 | Button to proceed with the selected plan | sticky CTA in `products/[slug].tsx` → adds to the bucket |
 | **Bucket / cart to place the order** *(extra)* | `mobile/src/app/cart.tsx`, `mobile/src/cart.tsx` (persisted store) |
 | **Order placement + history** *(extra)* | `POST/GET /api/orders`, `orders` + `order_items` tables, `orders.tsx` / `order/[reference].tsx` |
+| **Dummy payment gateway** *(extra)* | `server/src/routes/payments.js`, `payments` table, `mobile/src/app/checkout/[reference].tsx` — Card/UPI/Netbanking, simulated success/decline, order confirmed server‑side |
+| **Google sign-in** *(extra)* | `server/src/routes/auth.js` + `lib/auth.js` (ID‑token verify → session JWT), `users` table, `mobile/src/auth.tsx` (`expo-auth-session`), Profile tab. Optional — orders link to the user when signed in; dev mock stands in until OAuth client IDs are set |
 | Data from a backend API + DB, nothing hard‑coded | Express + Prisma + PostgreSQL |
 | Unique URL per product | `/products/[slug]` (expo‑router, `onefi://` scheme) |
 | ≥ 3 products, each with ≥ 2 variants | 4 products, 2–3 variants each (`seed.js`) |

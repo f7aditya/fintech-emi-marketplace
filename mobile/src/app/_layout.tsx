@@ -12,6 +12,7 @@ import {
   Poppins_800ExtraBold,
 } from '@expo-google-fonts/poppins';
 
+import { AuthProvider } from '../auth';
 import { CartProvider } from '../cart';
 import { colors } from '../theme';
 
@@ -34,21 +35,24 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <CartProvider>
-        <StatusBar style="dark" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.surface },
-            animation: 'slide_from_right',
-          }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="products/[slug]" />
-          <Stack.Screen name="cart" />
-          <Stack.Screen name="orders" />
-          <Stack.Screen name="order/[reference]" />
-        </Stack>
-      </CartProvider>
+      <AuthProvider>
+        <CartProvider>
+          <StatusBar style="dark" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.surface },
+              animation: 'slide_from_right',
+            }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="products/[slug]" />
+            <Stack.Screen name="cart" />
+            <Stack.Screen name="checkout/[reference]" />
+            <Stack.Screen name="orders" />
+            <Stack.Screen name="order/[reference]" />
+          </Stack>
+        </CartProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

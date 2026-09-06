@@ -74,6 +74,12 @@ export default function OrderScreen() {
         <View style={styles.card}>
           <Row label="Monthly EMI" value={order.monthly.display} strong />
           <Row label="Paid today" value={order.downPayment.display} />
+          {order.payment?.status === 'SUCCESS' && (
+            <Row
+              label={`Paid via ${order.payment.method === 'CARD' ? 'card' : order.payment.method === 'UPI' ? 'UPI' : 'netbanking'}`}
+              value={order.payment.instrumentHint ?? order.payment.reference}
+            />
+          )}
           {order.cashback && <Row label="Cashback credited" value={`− ${order.cashback.display}`} positive />}
           <View style={styles.divider} />
           <Row label="Total payable over tenure" value={order.totalPayable.display} strong />

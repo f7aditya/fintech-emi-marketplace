@@ -40,10 +40,11 @@ export default function CartScreen() {
       const { order } = await api.createOrder({
         items: items.map((i) => ({ variantId: i.variantId, emiPlanId: i.plan.id, quantity: i.quantity })),
       });
-      clear();
-      router.replace(`/order/${order.reference}`);
+      // Bucket is kept until the payment succeeds, so the user can come back here
+      // to adjust and a declined payment can be retried. Checkout clears it on success.
+      router.push(`/checkout/${order.reference}`);
     } catch (e) {
-      notify('Couldn’t place order', e instanceof Error ? e.message : 'Please try again.');
+      notify('Couldn’t start checkout', e instanceof Error ? e.message : 'Please try again.');
     } finally {
       setPlacing(false);
     }
@@ -118,7 +119,7 @@ export default function CartScreen() {
           <AppText style={styles.ctaValue}>{formatPaise(totals.downPaymentPaise)}</AppText>
         </View>
         <Pressable style={[styles.placeBtn, placing && styles.placeBtnDisabled]} disabled={placing} onPress={placeOrder}>
-          {placing ? <ActivityIndicator color="#fff" /> : <AppText style={styles.placeBtnText}>Place order</AppText>}
+          {placing ? <ActivityIndicator color="#fff" /> : <AppText style={styles.placeBtnText}>Proceed to payment</AppText>}
         </Pressable>
       </View>
     </View>

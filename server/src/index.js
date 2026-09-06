@@ -4,8 +4,11 @@ import cors from 'cors';
 import morgan from 'morgan';
 
 import { prisma } from './prisma.js';
+import { attachUser } from './lib/auth.js';
+import { authRouter } from './routes/auth.js';
 import { productsRouter } from './routes/products.js';
 import { ordersRouter } from './routes/orders.js';
+import { paymentsRouter } from './routes/payments.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -37,6 +40,7 @@ app.use(
 );
 app.use(express.json());
 app.use(morgan('dev'));
+app.use(attachUser); // non-blocking: sets req.user when a valid Bearer token is present
 
 app.get('/', (_req, res) => {
   res.json({
@@ -44,12 +48,18 @@ app.get('/', (_req, res) => {
     status: 'ok',
     endpoints: [
       '/api/health',
+      '/api/auth/config',
+      'POST /api/auth/google',
+      'POST /api/auth/mock',
+      '/api/auth/me',
       '/api/products',
       '/api/products/:id',
       '/api/products/:id/emi-plans',
       'POST /api/orders',
       '/api/orders',
       '/api/orders/:ref',
+      '/api/payments/:ref',
+      'POST /api/payments/:ref/confirm',
     ],
   });
 });
@@ -63,8 +73,10 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
+app.use('/api/auth', authRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/orders', ordersRouter);
+app.use('/api/payments', paymentsRouter);
 
 // 404
 app.use((req, res) => {

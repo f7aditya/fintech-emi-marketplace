@@ -2,9 +2,14 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import type {
+  AuthConfig,
+  AuthResponse,
+  ConfirmPaymentPayload,
   CreateOrderPayload,
+  MeResponse,
   OrderListResponse,
   OrderResponse,
+  PaymentResponse,
   ProductListResponse,
   ProductResponse,
 } from './types';
@@ -29,24 +34,36 @@ function resolveBaseUrl(): string {
 
 export const API_BASE = resolveBaseUrl();
 
+// Session token — set by the auth store on hydrate / sign-in / sign-out.
+let authToken: string | null = null;
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       Accept: 'application/json',
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...init?.headers,
     },
   });
   if (!res.ok) {
-    let detail = '';
+    let body: unknown;
     try {
-      detail = ((await res.json()) as { error?: string })?.error ?? '';
+      body = await res.json();
     } catch {
       /* ignore */
     }
-    const err = new Error(detail || `Request failed (${res.status})`) as Error & { status?: number };
+    const detail = (body as { error?: string })?.error ?? '';
+    const err = new Error(detail || `Request failed (${res.status})`) as Error & {
+      status?: number;
+      body?: unknown;
+    };
     err.status = res.status;
+    err.body = body;
     throw err;
   }
   return (await res.json()) as T;
@@ -60,4 +77,19 @@ export const api = {
     http<OrderResponse>('/api/orders', { method: 'POST', body: JSON.stringify(payload) }),
   listOrders: () => http<OrderListResponse>('/api/orders'),
   getOrder: (reference: string) => http<OrderResponse>(`/api/orders/${encodeURIComponent(reference)}`),
+
+  getPayment: (reference: string) =>
+    http<PaymentResponse>(`/api/payments/${encodeURIComponent(reference)}`),
+  confirmPayment: (reference: string, payload: ConfirmPaymentPayload) =>
+    http<PaymentResponse>(`/api/payments/${encodeURIComponent(reference)}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  authConfig: () => http<AuthConfig>('/api/auth/config'),
+  googleAuth: (idToken: string) =>
+    http<AuthResponse>('/api/auth/google', { method: 'POST', body: JSON.stringify({ idToken }) }),
+  mockAuth: (body: { email: string; name?: string; picture?: string }) =>
+    http<AuthResponse>('/api/auth/mock', { method: 'POST', body: JSON.stringify(body) }),
+  me: () => http<MeResponse>('/api/auth/me'),
 };

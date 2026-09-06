@@ -104,6 +104,35 @@ export function serializeOrderItem(item) {
   };
 }
 
+export function serializeUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    picture: user.picture ?? null,
+    provider: user.provider,
+    createdAt: user.createdAt,
+  };
+}
+
+export function serializePayment(payment) {
+  if (!payment) return null;
+  return {
+    id: payment.id,
+    reference: payment.reference,
+    gateway: payment.gateway,
+    method: payment.method,
+    status: payment.status,
+    amount: money(payment.amountPaise),
+    instrumentHint: payment.instrumentHint ?? null,
+    failureReason: payment.failureReason ?? null,
+    attempts: payment.attempts,
+    paidAt: payment.paidAt ?? null,
+    createdAt: payment.createdAt,
+  };
+}
+
 export function serializeOrder(order) {
   return {
     id: order.id,
@@ -117,6 +146,7 @@ export function serializeOrder(order) {
     totalPayable: money(order.totalPayablePaise),
     firstEmiOn: order.firstEmiOn,
     createdAt: order.createdAt,
+    payment: 'payment' in order ? serializePayment(order.payment) : undefined,
     items: (order.items ?? []).map(serializeOrderItem),
   };
 }

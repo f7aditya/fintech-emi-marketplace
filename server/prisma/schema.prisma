@@ -10,6 +10,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// A signed-in customer. Sign-in is optional — orders can still be placed
+/// anonymously — but once a user authenticates (Google, or the dev mock) their
+/// orders are linked here and the profile shows their name / photo.
+model User {
+  id        String   @id @default(cuid())
+  googleId  String?  @unique /// Google "sub" claim; null for dev-mock users
+  email     String   @unique
+  name      String
+  picture   String?  /// avatar URL from Google
+  provider  String   @default("google") /// google | mock
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@map("users")
+}
+
 /// A sellable product (e.g. "Apple iPhone 17 Pro"). Each product owns one or more variants.
 model Product {
   id          String   @id @default(cuid())
@@ -85,7 +103,9 @@ model EmiPlan {
 model Order {
   id                String   @id @default(cuid())
   reference         String   @unique /// short human code, e.g. "1FI-8K2P4Q"
-  status            String   @default("PLACED") /// PLACED | CONFIRMED | CANCELLED
+  status            String   @default("PENDING_PAYMENT") /// PENDING_PAYMENT | CONFIRMED | PLACED | CANCELLED
+  user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId            String?  /// set when the order was placed by a signed-in user
   customerName      String?
   itemCount         Int      /// sum of line quantities
   monthlyPaise      Int      /// total of every line's monthly instalment
@@ -95,10 +115,35 @@ model Order {
   firstEmiOn        DateTime /// when the first instalment is due (createdAt + 1 month)
   createdAt         DateTime @default(now())
 
-  items OrderItem[]
+  items   OrderItem[]
+  payment Payment?
 
   @@index([createdAt])
+  @@index([userId])
   @@map("orders")
+}
+
+/// A single dummy-gateway payment attempt for an order's "due today" amount.
+/// The gateway ("DummyPay") is simulated in server/src/routes/payments.js — no
+/// real money moves. One payment row per order; it is retried in place.
+model Payment {
+  id             String   @id @default(cuid())
+  reference      String   @unique /// short human code, e.g. "PAY-8K2P4Q"
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId        String   @unique
+  gateway        String   @default("DummyPay")
+  method         String   @default("CARD") /// CARD | UPI | NETBANKING
+  amountPaise    Int      /// what the customer pays now (the order's down payment)
+  status         String   @default("CREATED") /// CREATED | PROCESSING | SUCCESS | FAILED
+  instrumentHint String?  /// masked instrument, e.g. "•••• 4242", "name@upi", "HDFC"
+  failureReason  String?  /// set when status = FAILED
+  attempts       Int      @default(0)
+  paidAt         DateTime? /// set when status = SUCCESS
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([orderId])
+  @@map("payments")
 }
 
 /// One line in an order — a chosen variant + EMI plan, with a quantity.
